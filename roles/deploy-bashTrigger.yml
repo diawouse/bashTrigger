@@ -1,0 +1,5 @@
+- name: wrapper for role testing
+  hosts: all
+  remote_user: ubuntu
+  roles:
+    - 'bashTrigger'

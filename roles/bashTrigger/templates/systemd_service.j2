@@ -1,0 +1,12 @@
+[Unit]
+Description=BashTrigger service
+Requires=network.target
+After=syslog.target network.target
+
+[Service]
+Type=forking
+ExecStart=/etc/init.d/"{{ APP_NAME }}" start
+ExecStop=/etc/init.d/"{{ APP_NAME }}" stop
+
+[Install]
+WantedBy=multi-user.target

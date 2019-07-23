@@ -1,0 +1,138 @@
+---
+- name: Get jars from Nexus
+  maven_artifact:
+    artifact_id: "{{ item.name }}"
+    group_id: "{{ maven_group_id }}"
+    repository_url: "{{ nexus_url }}{{ maven_public_uri }}"
+    dest: "/tmp/{{ item.name }}-{{ item.version }}.jar"
+    version: "{{ item.version }}"
+    username: "{{ nexus_username }}"
+    password: "{{ nexus_password }}"
+  with_items:
+    - "{{ backend_build_files }}"
+  tags:
+    - bashTrigger-get-jars
+    - deploy
+
+- name: Create target directory
+  file: path="{{ build_directory }}/{{ item.name }}" state=directory mode=0755
+  with_items:
+    - "{{ backend_build_files }}"
+  tags:
+    - deploy
+
+- name: "copies the jar files over"
+  copy: 
+     remote_src: true
+     src: "/tmp/{{ item.name }}-{{ item.version }}.jar" 
+     dest: "{{ APP_HOME }}/{{ item.name }}-{{ item.version }}.jar"
+     mode: 0755
+  with_items:
+    - "{{ backend_build_files }}"
+  tags:
+    - deploy
+
+- stat: path="{{ build_directory }}/{{ item.name }}/current"
+  register: current_links
+  with_items:
+    - "{{ backend_build_files }}"
+  tags:
+    - deploy
+
+- name: link to previous app releases
+  shell: "ln -nsf $( readlink {{ APP_HOME }}/current ) {{ APP_HOME }}/previous"
+  when: item.stat.islink is defined and item.stat.islink
+  with_items: "{{ current_links.results }}"
+  tags:
+    - deploy
+
+- name: link to current app releases
+  file:
+    dest="{{ APP_HOME }}/current"
+    src="{{ APP_HOME }}/{{ item.name }}-{{ item.version }}.jar"
+    state=link
+    force=yes
+  with_items:
+    - "{{ backend_build_files }}"
+  tags:
+    - deploy
+
+- name: remove old deploys (keeping the two latest)
+  shell: "ls -tr {{ APP_HOME }}/{{ item.name }}-{{ item.version }}.jar | head -n -2 | xargs rm -Rf"
+  with_items:
+    - "{{ backend_build_files }}"
+  tags:
+    - deploy
+
+- name: Check systemd
+  stat: path="/lib/systemd/system"
+  register: systemd_check
+  tags:
+    - deploy
+
+- name: Create data directory
+  file: path="{{ build_directory }}/data" state=directory mode=0755
+  tags:
+    - deploy
+    
+- name: "Generate default scripts file"
+  template:
+    src: "scriptsfile.sh.j2"
+    dest: "{{ build_directory }}/data/scriptsfile.sh"
+    owner: root
+    group: root
+    mode: 0755
+  tags:
+    - deploy
+
+- name: "Generate default data file"
+  template:
+    src: "data.json.j2"
+    dest: "{{ build_directory }}/data/data.json"
+    owner: root
+    group: root
+    mode: 0755
+  tags:
+    - deploy
+    
+- name: "Generate app config"
+  template:
+    src: "config.yml.j2"
+    dest: "{{ build_directory }}/{{ APP_NAME }}/config.yml"
+    owner: root
+    group: root
+    mode: 0755
+  tags:
+    - deploy
+
+- name: Create Unit file
+  template: src=systemd_service.j2 dest=/lib/systemd/system/{{ APP_NAME }}.service mode=644
+  when: systemd_check.stat.isdir is defined and systemd_check.stat.isdir
+  tags:
+    - deploy
+
+- name: "Generate init script to server"
+  template:
+    src: "init_service.j2"
+    dest: "/etc/init.d/{{ APP_NAME }}"
+    owner: root
+    group: root
+    mode: 0755
+  tags:
+    - deploy
+  
+- name: reload systemctl
+  become: yes
+  command: systemctl daemon-reload
+  when: systemd_check.stat.isdir is defined and systemd_check.stat.isdir
+  ignore_errors: yes
+  tags:
+    - deploy
+
+- name: restart service
+  become: yes
+  service:
+    name: "{{ APP_NAME }}"
+    state: restarted
+  tags:
+    - deploy

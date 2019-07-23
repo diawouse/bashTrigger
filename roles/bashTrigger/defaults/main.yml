@@ -1,0 +1,33 @@
+---
+local_dir_conf: "/opt"
+build: "bashTrigger"
+build_directory: "{{ local_dir_conf }}/{{ build }}"
+
+
+nexus_url: "https://nexus.dsconsulting.io"
+maven_public_uri: "/repository/maven-public/"
+
+#maven group id 
+maven_group_id: "com.dsconsulting.batch"
+maven_group_id_url: "io/dsconsulting/agilefabric/"
+
+backend_build_files:
+  - {name: "bashTrigger", version: "0.0.1-SNAPSHOT"}
+
+nexus_username: myUSERNAME
+nexus_password: myPASSWORD
+
+APP_NAME: "bashTrigger"
+APP_HOME: "{{ build_directory }}/{{ APP_NAME }}"
+
+APP_CONF_FILE: config.yml
+
+APP_CONF_PATH: "{{ APP_HOME }}/{{ APP_CONF_FILE }}"
+
+SCRIPTFILEPATH: "{{ build_directory }}/data/scriptsfile.sh"
+
+APIURL: "http://localhost:8080/api/notification/v1/users/"
+
+DATAFILEPATH: "{{ build_directory }}/data/data.json"
+
+SLEEPDURATION: "4000"
